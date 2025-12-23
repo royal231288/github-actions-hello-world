@@ -1,13 +1,16 @@
-# GitHub Actions - EC2 Connectivity Check
+# GitHub Actions - EC2 Management Workflows
 
-This repository demonstrates how to use GitHub Actions to automatically check connectivity to an AWS EC2 instance and extract metadata information on every push to the main branch.
+This repository demonstrates how to use GitHub Actions to manage and monitor AWS EC2 instances with two automated workflows.
 
 ## 🎯 What This Does
 
-The workflow automatically:
-- ✅ Tests SSH connectivity to your EC2 instance
-- 🔐 Securely connects using SSH key authentication
-- 📊 Extracts and displays EC2 metadata including:
+This project includes two workflows:
+
+### Workflow 1: EC2 Connectivity Check (Automatic)
+Runs automatically on every push to main branch:
+- Tests SSH connectivity to your EC2 instance
+- Securely connects using SSH key authentication
+- Extracts and displays EC2 metadata including:
   - Public IP address
   - Private IP address
   - Hostname
@@ -15,6 +18,14 @@ The workflow automatically:
   - Availability Zone
   - Instance Type
   - System uptime
+
+### Workflow 2: Fix The Hostname (Manual)
+Manual execution to manage EC2 hostname:
+- Checks current hostname on EC2 instance
+- Sets hostname to "HelloWorld" if it's different
+- Updates configuration for persistence across reboots
+- Verifies the hostname change was successful
+- Skips if hostname is already correct
 
 ## 🚀 Quick Start Guide
 
@@ -109,8 +120,9 @@ This is the most important step! Your workflow needs three secrets to connect to
 
 ## 🔄 How It Works
 
-### Workflow Trigger
-The workflow is triggered automatically on every push to the `main` branch:
+### Workflow 1: EC2 Connectivity Check
+
+**Trigger:** Automatic on every push to `main` branch
 ```yaml
 on:
   push:
@@ -118,8 +130,7 @@ on:
       - main
 ```
 
-### Workflow Steps
-
+**Workflow Steps:**
 1. **Checkout Repository**: Gets the latest code from your repo
 2. **Setup SSH Key**: 
    - Creates SSH directory structure
@@ -129,19 +140,52 @@ on:
 3. **Test EC2 Connectivity**: Performs a simple SSH connection test
 4. **Extract EC2 Metadata**: 
    - Connects to EC2 instance
-   - Uses AWS metadata service (169.254.169.254) to fetch instance details
+   - Uses AWS IMDSv2 (Instance Metadata Service v2) to fetch instance details
    - Displays comprehensive system information
 5. **Cleanup SSH Key**: Removes the SSH key file for security (always runs)
 
+### Workflow 2: Fix The Hostname
+
+**Trigger:** Manual execution only via GitHub UI
+```yaml
+on:
+  workflow_dispatch:
+```
+
+**Workflow Steps:**
+1. **Checkout Repository**: Gets the latest code
+2. **Setup SSH Key**: Configures secure SSH connection
+3. **Check Current Hostname**: Reads and displays current hostname
+4. **Set Hostname to HelloWorld** (conditional): 
+   - Only runs if hostname is NOT already "HelloWorld"
+   - Uses `hostnamectl` to set hostname
+   - Updates `/etc/hostname` for persistence
+   - Updates `/etc/hosts` for proper resolution
+5. **Verify Hostname Change**: Confirms the change was successful
+6. **Cleanup SSH Key**: Removes SSH key for security
+
 ## 📋 Viewing Workflow Results
 
-After pushing to GitHub:
+### EC2 Connectivity Check Workflow
 
+After pushing to GitHub:
 1. Go to your repository on GitHub
 2. Click the **Actions** tab (top navigation)
-3. You'll see your workflow runs listed
+3. You'll see workflow runs for "EC2 Connectivity Check"
 4. Click on any run to see detailed logs
 5. Expand the "Extract EC2 Metadata" step to view all the information
+
+### Fix The Hostname Workflow
+
+To run manually:
+1. Go to your repository on GitHub
+2. Click the **Actions** tab (top navigation)
+3. Click **"Fix The Hostname"** workflow in the left sidebar
+4. Click **"Run workflow"** button (top right)
+5. Select branch (usually `main`)
+6. Click the green **"Run workflow"** button
+7. Wait a few seconds and refresh to see the run appear
+8. Click on the run to view execution details
 
 ## 🔒 Security Best Practices
 
@@ -158,7 +202,9 @@ After pushing to GitHub:
 
 ## 🛠️ Customization
 
-### Change Trigger to Other Branches
+### EC2 Connectivity Check Workflow
+
+**Change Trigger to Other Branches:**
 Edit [.github/workflows/ec2-connectivity-check.yml](.github/workflows/ec2-connectivity-check.yml):
 ```yaml
 on:
@@ -168,7 +214,7 @@ on:
       - develop  # Add more branches
 ```
 
-### Add Schedule (Run at Specific Times)
+**Add Schedule (Run at Specific Times):**
 ```yaml
 on:
   push:
@@ -178,7 +224,7 @@ on:
     - cron: '0 0 * * *'  # Runs daily at midnight UTC
 ```
 
-### Add Manual Trigger
+**Add Manual Trigger:**
 ```yaml
 on:
   push:
@@ -187,32 +233,75 @@ on:
   workflow_dispatch:  # Allows manual trigger from GitHub UI
 ```
 
+### Fix The Hostname Workflow
+
+**Change Hostname to Something Else:**
+Edit [.github/workflows/fix-hostname.yml](.github/workflows/fix-hostname.yml) and replace "HelloWorld" with your desired hostname in:
+- The comparison check
+- The `hostnamectl` command
+- The `/etc/hostname` update
+
+**Add Input Parameter for Custom Hostname:**
+```yaml
+on:
+  workflow_dispatch:
+    inputs:
+      hostname:
+        description: 'New hostname for EC2'
+        required: true
+        default: 'HelloWorld'
+```
+
+Then use `${{ inputs.hostname }}` in the workflow steps.
+
 ## 📁 Repository Structure
 
 ```
 .
 ├── .github/
 │   └── workflows/
-│       └── ec2-connectivity-check.yml    # Main workflow file
+│       ├── ec2-connectivity-check.yml    # Automatic EC2 monitoring workflow
+│       └── fix-hostname.yml              # Manual hostname management workflow
 ├── .gitignore                            # Files to ignore in git
 └── README.md                             # This file
 ```
 
 ## 🐛 Troubleshooting
 
-### Workflow Fails with "Permission denied (publickey)"
+### EC2 Connectivity Check Workflow
+
+**Workflow Fails with "Permission denied (publickey)"**
 - Verify that `EC2_SSH_KEY` contains the complete private key
 - Check that `EC2_USER` matches your EC2 instance's SSH user
 - Ensure the corresponding public key is in `~/.ssh/authorized_keys` on your EC2
 
-### Workflow Fails with "Connection timed out"
+**Workflow Fails with "Connection timed out"**
 - Verify `EC2_HOST` has the correct IP address
 - Check EC2 security group allows SSH (port 22) from GitHub Actions IPs
 - Ensure your EC2 instance is running
 
-### Metadata Service Returns Errors
+**Metadata Service Returns Errors**
 - Ensure your EC2 instance has the metadata service enabled
-- Some instance types might have IMDSv2 requirements (this workflow uses IMDSv1)
+- This workflow uses IMDSv2 (token-based authentication)
+- Check that IMDSv2 is not disabled in instance settings
+
+### Fix The Hostname Workflow
+
+**Workflow Fails with "sudo: command not found" or Permission Errors**
+- Ensure your EC2 user has sudo privileges
+- For Ubuntu instances, the `ubuntu` user has sudo by default
+- For Amazon Linux, use `ec2-user`
+- Test manually: `ssh user@host "sudo -n true"` should succeed
+
+**Hostname Changes Don't Persist After Reboot**
+- The workflow updates both `/etc/hostname` and `/etc/hosts`
+- Verify the user has write permissions with sudo
+- Check if your instance uses a different hostname configuration system
+
+**Workflow Shows "No changes needed" but Hostname is Wrong**
+- Check the comparison logic in the workflow
+- Hostname comparison is case-sensitive
+- Verify with: `ssh user@host "hostname"` to see actual value
 
 ## 📚 Learn More
 
@@ -220,14 +309,17 @@ on:
 - [AWS EC2 Instance Metadata Service](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-metadata.html)
 - [GitHub Encrypted Secrets](https://docs.github.com/en/actions/security-guides/encrypted-secrets)
 
-## 📝 License
+## � Workflows Summary
 
-This project is open source and available under the [MIT License](LICENSE).
-
-## 🤝 Contributing
-
-Feel free to fork this repository and submit pull requests for improvements!
+| Workflow | Trigger | Purpose | File |
+|----------|---------|---------|------|
+| EC2 Connectivity Check | Automatic (Push to main) | Monitor EC2 and extract metadata | [ec2-connectivity-check.yml](.github/workflows/ec2-connectivity-check.yml) |
+| Fix The Hostname | Manual (workflow_dispatch) | Set EC2 hostname to HelloWorld | [fix-hostname.yml](.github/workflows/fix-hostname.yml) |
 
 ---
 
-**Made with ❤️ for learning GitHub Actions and AWS EC2 automation**
+## 🧑‍💻 Author
+**Md. Sarowar Alam**  
+Lead DevOps Engineer, Hogarth Worldwide  
+📧 Email: sarowar@hotmail.com  
+🔗 LinkedIn: [linkedin.com/in/sarowar](https://www.linkedin.com/in/sarowar/)
