@@ -1,0 +1,81 @@
+name: EC2 Connectivity Check
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  check-ec2-connectivity:
+    name: Verify EC2 Connection & Extract Metadata
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      
+      - name: Setup SSH Key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/ec2_key
+          chmod 600 ~/.ssh/ec2_key
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+      
+      - name: Test EC2 Connectivity
+        run: |
+          echo "🔍 Testing SSH connection to EC2 instance..."
+          ssh -i ~/.ssh/ec2_key -o ConnectTimeout=10 ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "echo '✅ SSH connection successful!'"
+      
+      - name: Extract EC2 Metadata
+        run: |
+          echo "📊 Extracting EC2 instance metadata..."
+          ssh -i ~/.ssh/ec2_key ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+            echo "=================================================="
+            echo "          EC2 Instance Information"
+            echo "=================================================="
+            
+            # Get hostname
+            echo ""
+            echo "🖥️  Hostname:"
+            hostname
+            
+            # Get public IP from AWS metadata service
+            echo ""
+            echo "🌐 Public IP Address:"
+            curl -s http://169.254.169.254/latest/meta-data/public-ipv4 || echo "Unable to retrieve public IP"
+            
+            # Get private IP from AWS metadata service
+            echo ""
+            echo "🔒 Private IP Address:"
+            curl -s http://169.254.169.254/latest/meta-data/local-ipv4 || echo "Unable to retrieve private IP"
+            
+            # Get instance ID
+            echo ""
+            echo "🆔 Instance ID:"
+            curl -s http://169.254.169.254/latest/meta-data/instance-id || echo "Unable to retrieve instance ID"
+            
+            # Get availability zone
+            echo ""
+            echo "📍 Availability Zone:"
+            curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone || echo "Unable to retrieve AZ"
+            
+            # Get instance type
+            echo ""
+            echo "⚙️  Instance Type:"
+            curl -s http://169.254.169.254/latest/meta-data/instance-type || echo "Unable to retrieve instance type"
+            
+            # System uptime
+            echo ""
+            echo "⏱️  System Uptime:"
+            uptime
+            
+            echo ""
+            echo "=================================================="
+            echo "          Connection Check Complete!"
+            echo "=================================================="
+          EOF
+      
+      - name: Cleanup SSH Key
+        if: always()
+        run: |
+          rm -f ~/.ssh/ec2_key
